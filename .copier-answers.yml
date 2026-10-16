@@ -1,0 +1,18 @@
+# Changes here will be overwritten by Copier; NEVER EDIT MANUALLY
+_commit: v2.3.0
+_src_path: https://github.com/napari/napari-plugin-template
+display_name: SNT Bridge
+email: ferreirat@janelia.hhmi.org
+full_name: Tiago Ferreira
+github_repository_url: provide later
+github_username_or_organization: morphonets
+include_reader_plugin: false
+include_sample_data_plugin: false
+include_widget_plugin: true
+include_writer_plugin: false
+install_dependabot: false
+install_precommit: false
+license: GNU GPL v3.0
+module_name: napari_snt
+plugin_name: napari-snt
+short_description: Send napari polylines to SNT (Fiji) via snt:// links
