@@ -1,36 +1,12 @@
 name: napari-snt
-display_name: SNT Bridge
-# use 'hidden' to remove plugin from napari hub search results
+display_name: napari-snt
 visibility: public
-# see https://napari.org/stable/plugins/technical_references/manifest.html#fields for valid categories
-# categories: []
+categories: ["Utilities", "Annotation"]
 contributions:
   commands:
-    - id: napari-snt.make_container_widget
-      python_name: napari_snt._widget:ImageThreshold
-      title: Make threshold Container widget
-    - id: napari-snt.make_magic_widget
-      python_name: napari_snt._widget:threshold_magic_widget
-      title: Make threshold magic widget
-    - id: napari-snt.make_function_widget
-      python_name: napari_snt._widget:threshold_autogenerate_widget
-      title: Make threshold function widget
-    - id: napari-snt.make_qwidget
-      python_name: napari_snt._widget:ExampleQWidget
-      title: Make example QWidget
+    - id: napari-snt.make_send_widget
+      python_name: napari_snt._widget:SendToSNTWidget
+      title: SNT Bridge
   widgets:
-    - command: napari-snt.make_container_widget
-      display_name: Container Threshold
-    - command: napari-snt.make_magic_widget
-      display_name: Magic Threshold
-    - command: napari-snt.make_function_widget
-      autogenerate: true
-      display_name: Autogenerate Threshold
-    - command: napari-snt.make_qwidget
-      display_name: Example QWidget
-  menus:
-    napari/layers/segment:
-      - command: napari-snt.make_container_widget
-      - command: napari-snt.make_magic_widget
-      - command: napari-snt.make_function_widget
-      - command: napari-snt.make_qwidget
+    - command: napari-snt.make_send_widget
+      display_name: SNT Bridge
