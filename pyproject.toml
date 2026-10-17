@@ -7,7 +7,6 @@ license = "GPL-3.0-or-later"
 license-files = ["LICENSE"]
 authors = [
   {name = "Tiago Ferreira"},
-  {email = "ferreirat@janelia.hhmi.org"},
 ]
 classifiers = [
     "Development Status :: 2 - Pre-Alpha",
@@ -32,6 +31,13 @@ dependencies = [
     "numpy",
     "qtpy",
 ]
+
+[project.urls]
+"Homepage" = "https://github.com/morphonets/napari-snt"
+"Bug Tracker" = "https://github.com/morphonets/napari-snt/issues"
+"Documentation" = "https://github.com/morphonets/napari-snt#README.md"
+"Source Code" = "https://github.com/morphonets/napari-snt"
+"User Support" = "https://github.com/morphonets/napari-snt/issues"
 
 [project.optional-dependencies]
 # Allow easily installation with the full, default napari installation

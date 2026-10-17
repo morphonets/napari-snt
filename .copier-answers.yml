@@ -1,10 +1,10 @@
 # Changes here will be overwritten by Copier; NEVER EDIT MANUALLY
 _commit: v2.3.0
 _src_path: https://github.com/napari/napari-plugin-template
-display_name: SNT Bridge
-email: ferreirat@janelia.hhmi.org
+display_name: napari-snt
+email: ""
 full_name: Tiago Ferreira
-github_repository_url: provide later
+github_repository_url: https://github.com/morphonets/napari-snt
 github_username_or_organization: morphonets
 include_reader_plugin: false
 include_sample_data_plugin: false
