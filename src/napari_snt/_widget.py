@@ -70,6 +70,7 @@ class SendToSNTWidget(QWidget):
             self.voxel_edits.append(edit)
         self.send_btn = QPushButton('Open in SNT')
         self.copy_btn = QPushButton('Copy snt:// Link')
+        self._native_scheme = False
         self.replace_box = QCheckBox('Replace in SNT')
         self.replace_box.setToolTip(
             'Discard paths already in SNT instead of adding to them '
@@ -135,12 +136,12 @@ class SendToSNTWidget(QWidget):
     def _startup_status(self):
         # Empty when the OS cannot tell us (None)
         registered = scheme_registered()
+        # snt:// only if known to be registered, otherwise fiji://snt/
+        self._native_scheme = registered is True
         if registered is True:
             self._info('Bridge available')
         elif registered is False:
-            self._info(
-                'SNT not found: snt:// links are not registered in your system'
-            )
+            self._info('snt:// is not registered in your system: using fiji://')
 
     def _refresh(self, *_):
         current = self.combo.currentText()
@@ -247,7 +248,7 @@ class SendToSNTWidget(QWidget):
             self._error(f'Error: {err}')
             return None, None
         mode = 'replace' if self.replace_box.isChecked() else 'add'
-        return swc, snt_link(swc, mode)
+        return swc, snt_link(swc, mode, fallback=not self._native_scheme)
 
     def send(self):
         swc, link = self._export()

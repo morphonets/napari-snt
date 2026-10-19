@@ -51,6 +51,7 @@ def test_write_and_link(make_napari_viewer):
     swc = write_swc(layer)
     assert swc.exists() and swc.suffix == '.swc'
     assert snt_link(swc).startswith('snt://open?tracings=')
+    assert snt_link(swc, fallback=True).startswith('fiji://snt/open?tracings=')
 
 
 def test_widget_lists_layers(make_napari_viewer):
@@ -68,8 +69,12 @@ def test_copy_link(make_napari_viewer):
     viewer = make_napari_viewer()
     widget = SendToSNTWidget(viewer)
     viewer.add_points([[0, 0], [1, 1]], name='pts')
+    widget._native_scheme = True
     widget.copy_link()
     assert QApplication.clipboard().text().startswith('snt://open?tracings=')
+    widget._native_scheme = False
+    widget.copy_link()
+    assert QApplication.clipboard().text().startswith('fiji://snt/open?')
 
 
 def test_copy_link_mode(make_napari_viewer):
