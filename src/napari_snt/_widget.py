@@ -24,11 +24,13 @@ from qtpy.QtWidgets import (
 
 from ._scheme import scheme_registered
 from ._swc import (
+    FEATURE_ID,
+    FEATURE_PARENT,
     INBOX,
     clear_inbox,
     inbox_files,
     make_calibration,
-    read_swc,
+    read_swc_tree,
     snt_link,
     swc_voxel_size,
     write_swc,
@@ -71,6 +73,7 @@ class SendToSNTWidget(QWidget):
         self.send_btn = QPushButton('Open in SNT')
         self.copy_btn = QPushButton('Copy snt:// Link')
         self._native_scheme = False
+        self._hierarchy_report = {}
         self.replace_box = QCheckBox('Replace in SNT')
         self.replace_box.setToolTip(
             'Discard paths already in SNT instead of adding to them '
@@ -241,21 +244,37 @@ class SendToSNTWidget(QWidget):
         if not name:
             return None, None
         try:
+            report = {}
             swc = write_swc(
-                self.viewer.layers[name], calib=self._calibration()
+                self.viewer.layers[name],
+                calib=self._calibration(),
+                report=report,
             )
         except (TypeError, ValueError, OSError) as err:
             self._error(f'Error: {err}')
             return None, None
         mode = 'replace' if self.replace_box.isChecked() else 'add'
+        self._hierarchy_report = report
         return swc, snt_link(swc, mode, fallback=not self._native_scheme)
+
+    def _repairs(self) -> str:
+        """Note on paths whose hierarchy could not be preserved"""
+        rep = self._hierarchy_report
+        parts = []
+        if rep.get('reassigned'):
+            parts.append(f"{rep['reassigned']} new or duplicated")
+        if rep.get('orphaned'):
+            parts.append(f"{rep['orphaned']} orphaned")
+        if not parts:
+            return ''
+        return ' - exported as roots: ' + ' and '.join(parts)
 
     def send(self):
         swc, link = self._export()
         if link is None:
             return
         if QDesktopServices.openUrl(QUrl(link)):
-            self._info(f'Opened in SNT: {swc.name}')
+            self._info(f'Opened in SNT: {swc.name}{self._repairs()}')
         else:
             self._error(
                 'Could not open the link (is the snt:// scheme registered in '
@@ -267,7 +286,7 @@ class SendToSNTWidget(QWidget):
         if link is None:
             return
         QApplication.clipboard().setText(link)
-        self._info(f'Link copied to clipboard ({swc.name})')
+        self._info(f'Link copied to clipboard ({swc.name}){self._repairs()}')
 
     def import_swc(self):
         start = str(INBOX) if INBOX.is_dir() else str(Path.home())
@@ -287,14 +306,18 @@ class SendToSNTWidget(QWidget):
                     # SNT-exported SWCs state their voxel size
                     self._set_voxel_size(header_voxel)
                 calib = self._calibration()
-                chains = read_swc(f)
+                chains, parents = read_swc_tree(f)
                 if not chains:
                     raise ValueError('no paths found')
             except (ValueError, OSError) as err:
                 self._error(f'Could not import {Path(f).name}: {err}')
                 continue
-            self.viewer.add_shapes(
+            layer = self.viewer.add_shapes(
                 [calib.from_um(c) for c in chains],
+                features={
+                    FEATURE_ID: list(range(1, len(chains) + 1)),
+                    FEATURE_PARENT: [p + 1 if p >= 0 else -1 for p in parents],
+                },
                 scale=calib.scale,
                 translate=calib.translate,
                 shape_type='path',
@@ -302,6 +325,10 @@ class SendToSNTWidget(QWidget):
                 edge_color='cyan',
                 edge_width=1,
             )
+            try:  # new paths: unassigned id and no parent
+                layer.feature_defaults = {FEATURE_ID: 0, FEATURE_PARENT: -1}
+            except (ValueError, KeyError, TypeError):
+                pass
             loaded.append(f'{Path(f).name} ({len(chains)} paths)')
         if loaded:
             self._info('Imported ' + ', '.join(loaded))

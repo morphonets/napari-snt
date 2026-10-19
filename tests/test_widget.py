@@ -4,7 +4,9 @@ from napari_snt import _swc
 from napari_snt._swc import (
     make_calibration,
     polylines,
+    polylines_with_parents,
     read_swc,
+    read_swc_tree,
     snt_link,
     swc_voxel_size,
     to_swc,
@@ -195,3 +197,49 @@ def test_header_voxel_size_keeps_full_precision(make_napari_viewer, tmp_path):
     set_voxel(widget, 'abc')  # invalid input is reverted
     assert widget._calibration().voxel[2] == 0.5
     assert widget.voxel_edits[0].text() == '0.5'
+
+
+_BRANCHED = (
+    '1 3 0 0 0 1 -1\n2 3 1 0 0 1 1\n3 3 2 0 0 1 2\n4 3 2 1 0 1 3\n'
+    '5 3 2 2 0 1 4\n6 3 3 0 0 1 3\n7 3 4 0 0 1 6\n'
+)
+
+
+def test_swc_hierarchy_roundtrip(tmp_path):
+    f = tmp_path / 'tree.swc'
+    f.write_text(_BRANCHED)
+    chains, parents = read_swc_tree(f)
+    assert parents == [-1, 0, 0]
+    again = to_swc(chains, parents=parents)
+    nodes = [ln.split() for ln in again.splitlines() if ln[0] != '#']
+    assert len(nodes) == 7  # branch vertices are not duplicated
+    assert [n[6] for n in nodes].count('-1') == 1
+
+
+def test_widget_import_sets_features_and_defaults(make_napari_viewer, tmp_path):
+    f = tmp_path / 'tree.swc'
+    f.write_text(_BRANCHED)
+    viewer = make_napari_viewer()
+    widget = SendToSNTWidget(viewer)
+    widget.load_swc([str(f)])
+    layer = viewer.layers['tree']
+    assert layer.features['id'].tolist() == [1, 2, 3]
+    assert layer.features['parent'].tolist() == [-1, 1, 1]
+
+
+def test_edited_layer_exports_without_errors(make_napari_viewer, tmp_path):
+    f = tmp_path / 'tree.swc'
+    f.write_text(_BRANCHED)
+    viewer = make_napari_viewer()
+    widget = SendToSNTWidget(viewer)
+    widget.load_swc([str(f)])
+    layer = viewer.layers['tree']
+    # Whatever napari assigns to a new shape, it must export as a root
+    layer.add([[0, 5, 5], [0, 6, 6]], shape_type='path')
+    polys, parents, stats = polylines_with_parents(layer)
+    assert len(polys) == 4 and parents[3] == -1
+    # Deleting the parent orphans its children
+    layer.selected_data = {0}
+    layer.remove_selected()
+    polys, parents, stats = polylines_with_parents(layer)
+    assert parents[:2] == [-1, -1] and stats['orphaned'] >= 2

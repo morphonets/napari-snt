@@ -89,35 +89,175 @@ def polylines(layer, calib: Calibration = IDENTITY) -> list[np.ndarray]:
     return out
 
 
-def to_swc(polys: list[np.ndarray], radius: float = 0.5) -> str:
-    """Serialize polylines as SWC text: one unbranched chain per polyline"""
+FEATURE_ID = 'id'
+FEATURE_PARENT = 'parent'
+# Branch vertex repeated by a child within this distance (um) is not rewritten
+_JOIN_TOL = 1e-3
+
+
+def hierarchy(layer, n_kept: int, kept: list[int]) -> tuple[list[int], dict]:
+    """Parent of each exported polyline, as an index into the exported list
+    (-1 for roots), from the layer's 'id' and 'parent' features.
+
+    kept holds the layer shape index of each exported polyline. Ids that are
+    not positive or are repeated (new or pasted shapes) are reassigned, and
+    parents that no longer exist (deleted shapes) or that form cycles become
+    roots. The second value counts these repairs: {'reassigned', 'orphaned'}"""
+    stats = {'reassigned': 0, 'orphaned': 0}
+    parents = [-1] * n_kept
+    feats = getattr(layer, 'features', None)
+    if feats is None or FEATURE_ID not in feats or FEATURE_PARENT not in feats:
+        return parents, stats
+    try:
+        ids = [int(feats[FEATURE_ID].iloc[i]) for i in kept]
+        pids = [int(feats[FEATURE_PARENT].iloc[i]) for i in kept]
+    except (ValueError, TypeError, IndexError):
+        return parents, stats  # e.g., NaN: treat all as roots
+    position = {}  # valid id -> exported position
+    for pos, sid in enumerate(ids):
+        if sid > 0 and sid not in position:
+            position[sid] = pos
+        else:
+            stats['reassigned'] += 1
+    for pos, pid in enumerate(pids):
+        # a duplicated id keeps only its first owner: others are roots
+        if position.get(ids[pos]) != pos:
+            continue
+        if pid in position and position[pid] != pos:
+            parents[pos] = position[pid]
+        elif pid > 0:
+            stats['orphaned'] += 1
+    for pos in range(n_kept):  # break cycles at the offending shape
+        seen, cur = {pos}, parents[pos]
+        while cur != -1:
+            if cur in seen:
+                parents[pos] = -1
+                stats['orphaned'] += 1
+                break
+            seen.add(cur)
+            cur = parents[cur]
+    return parents, stats
+
+
+def polylines_with_parents(
+    layer, calib: Calibration = IDENTITY
+) -> tuple[list[np.ndarray], list[int], dict]:
+    """polylines() plus the parent index of each polyline (see hierarchy())"""
+    polys, kept = _polylines(layer, calib)
+    parents, stats = hierarchy(layer, len(polys), kept)
+    return polys, parents, stats
+
+
+def polylines(layer, calib: Calibration = IDENTITY) -> list[np.ndarray]:
+    """Return the polylines of a Shapes (path/line) or Points layer as
+    (N, 3) arrays of coordinates in um, (z, y, x) order."""
+    return _polylines(layer, calib)[0]
+
+
+def _polylines(layer, calib: Calibration):
+    """Polylines and the layer shape index of each one"""
+    name = type(layer).__name__
+    if name == 'Shapes':
+        raw = [
+            (i, np.asarray(d, dtype=float))
+            for i, (d, t) in enumerate(zip(layer.data, layer.shape_type))
+            if t in ('path', 'line')
+        ]
+    elif name == 'Points':
+        raw = [(0, np.asarray(layer.data, dtype=float))]
+    else:
+        raise TypeError(f'Unsupported layer type: {name}')
+
+    out, kept = [], []
+    for idx, poly in raw:
+        if len(poly) < 2:
+            continue
+        # NB: Layer.data_to_world() converts a single position, not an array
+        # of positions (it keeps only the last ndim rows), so apply the
+        # layer's scale/translate directly (rotation/shear are ignored)
+        world = poly * np.asarray(layer.scale) + np.asarray(layer.translate)
+        world = world[:, -3:]  # ignore any leading non-spatial axes
+        if world.shape[1] == 2:  # 2D (y, x): pad z with 0
+            world = np.column_stack([np.zeros(len(world)), world])
+        out.append(calib.to_um(world))
+        kept.append(idx)
+    return out, kept
+
+
+def _emit_order(parents: list[int]) -> list[int]:
+    """Indices ordered so that every parent precedes its children"""
+    order, done = [], set()
+
+    def visit(i):
+        stack = []
+        while i != -1 and i not in done:
+            stack.append(i)
+            i = parents[i]
+        for j in reversed(stack):
+            done.add(j)
+            order.append(j)
+
+    for i in range(len(parents)):
+        visit(i)
+    return order
+
+
+def to_swc(
+    polys: list[np.ndarray],
+    radius: float = 0.5,
+    parents: list[int] | None = None,
+) -> str:
+    """Serialize polylines as SWC text: one unbranched chain per polyline.
+
+    If parents is given (index of the parent polyline, -1 for roots), a child
+    is attached to the parent vertex nearest to its first vertex. That vertex
+    is not written again if the child repeats it"""
     lines = ['# Exported from napari-snt (coordinates in um)']
     node_id = 0
-    for poly in polys:
-        parent = -1
-        for z, y, x in poly:
+    ids: dict[int, list[int]] = {}  # polyline -> node id of each vertex
+    parents = parents or [-1] * len(polys)
+    for i in _emit_order(parents):
+        poly = polys[i]
+        parent, first = -1, 0
+        if parents[i] != -1:
+            host = polys[parents[i]]
+            nearest = int(np.argmin(np.linalg.norm(host - poly[0], axis=1)))
+            parent = ids[parents[i]][nearest]
+            if np.allclose(host[nearest], poly[0], atol=_JOIN_TOL):
+                first = 1  # branch vertex already exists in the parent
+        ids[i] = [-1] * first
+        for z, y, x in poly[first:]:
             node_id += 1
             lines.append(
                 f'{node_id} 0 {x:.5f} {y:.5f} {z:.5f} {radius:g} {parent}'
             )
+            ids[i].append(node_id)
             parent = node_id
+        if first:
+            ids[i][0] = ids[parents[i]][nearest]
     return '\n'.join(lines) + '\n'
 
 
 def write_swc(
-    layer, radius: float = 0.5, calib: Calibration = IDENTITY
+    layer,
+    radius: float = 0.5,
+    calib: Calibration = IDENTITY,
+    report: dict | None = None,
 ) -> Path:
-    """Write the layer to the shared inbox, atomically"""
-    polys = polylines(layer, calib)
+    """Write the layer to the shared inbox, atomically. If report is given it
+    receives the hierarchy repairs counted by hierarchy()"""
+    polys, parents, stats = polylines_with_parents(layer, calib)
     if not polys:
         raise ValueError('No polylines (>= 2 points) found in the layer')
+    if report is not None:
+        report.update(stats)
     INBOX.mkdir(parents=True, exist_ok=True)
     safe = ''.join(c if c.isalnum() or c in '-_' else '_' for c in layer.name)
     millis = time.time_ns() // 10**6 % 1000
     stamp = f"{time.strftime('%Y%m%d_%H%M%S')}_{millis:03d}"
     target = INBOX / f'{safe}_{stamp}.swc'
     tmp = target.with_suffix('.tmp')
-    tmp.write_text(to_swc(polys, radius), encoding='ascii')
+    tmp.write_text(to_swc(polys, radius, parents), encoding='ascii')
     tmp.replace(target)
     return target
 
@@ -134,7 +274,13 @@ def snt_link(swc_path: Path, mode: str = 'add', fallback: bool = False) -> str:
 
 
 def read_swc(path) -> list[np.ndarray]:
-    """Parse an SWC file into unbranched chains of (z, y, x) coordinates.
+    """Chains of read_swc_tree(), without hierarchy"""
+    return read_swc_tree(path)[0]
+
+
+def read_swc_tree(path) -> tuple[list[np.ndarray], list[int]]:
+    """Parse an SWC file into unbranched chains of (z, y, x) coordinates and the
+    index of the parent chain of each one (-1 for roots).
 
     A new chain starts at each root and at each child of a branch point. Chains
     starting at a branch point include it as first vertex, so that they remain
@@ -171,18 +317,25 @@ def read_swc(path) -> list[np.ndarray]:
         if len(kids) > 1:
             starts.extend(kids)
 
-    chains = []
+    chains, owner = [], {}  # owner: node id -> chain index
+    pending = []  # (chain index, node id of the parent vertex or None)
     for start in starts:
         parent = nodes[start][3]
         chain = [zyx(parent)] if parent in nodes else []
         current = start
         chain.append(zyx(current))
+        members = [current]
         while len(children.get(current, ())) == 1:
             current = children[current][0]
             chain.append(zyx(current))
+            members.append(current)
         if len(chain) > 1:
+            for nid in members:
+                owner[nid] = len(chains)
+            pending.append(parent if parent in nodes else None)
             chains.append(np.asarray(chain, dtype=float))
-    return chains
+    parents = [-1 if p is None else owner.get(p, -1) for p in pending]
+    return chains, parents
 
 
 def inbox_files() -> list[Path]:
