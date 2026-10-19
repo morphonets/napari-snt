@@ -59,15 +59,6 @@ files in it (after confirmation), and *Help* opens this page.
 
 ## Installation
 
-Releases are published on [GitHub](https://github.com/morphonets/napari-snt/releases)
-(the plugin is not on PyPI). To install a release wheel:
-
-```bash
-pip install https://github.com/morphonets/napari-snt/releases/download/v0.0.1/napari_snt-0.0.1-py3-none-any.whl
-```
-
-Alternatively, install the development version:
-
 From napari: Plugins > Install/Uninstall Plugins..., scroll to the bottom of
 the plugin manager window to find the manual installation text box and type:
 
