@@ -8,6 +8,7 @@ from qtpy.QtCore import QUrl
 from qtpy.QtGui import QDesktopServices
 from qtpy.QtWidgets import (
     QApplication,
+    QCheckBox,
     QComboBox,
     QFileDialog,
     QGridLayout,
@@ -69,6 +70,11 @@ class SendToSNTWidget(QWidget):
             self.voxel_edits.append(edit)
         self.send_btn = QPushButton('Open in SNT')
         self.copy_btn = QPushButton('Copy snt:// Link')
+        self.replace_box = QCheckBox('Replace in SNT')
+        self.replace_box.setToolTip(
+            'Discard paths already in SNT instead of adding to them '
+            '(SNT asks for confirmation if they are unsaved)'
+        )
         self.import_btn = QPushButton('Import SWC...')
         self.reveal_btn = QPushButton('Open Folder')
         self.clear_btn = QPushButton('Clear Data')
@@ -80,6 +86,7 @@ class SendToSNTWidget(QWidget):
         buttons_out = QGridLayout()
         buttons_out.addWidget(self.send_btn, 0, 0)
         buttons_out.addWidget(self.copy_btn, 0, 1)
+        buttons_out.addWidget(self.replace_box, 1, 0, 1, 2)
         buttons_in = QGridLayout()
         buttons_in.addWidget(self.import_btn, 0, 0)
         buttons_misc = QGridLayout()
@@ -239,7 +246,8 @@ class SendToSNTWidget(QWidget):
         except (TypeError, ValueError, OSError) as err:
             self._error(f'Error: {err}')
             return None, None
-        return swc, snt_link(swc)
+        mode = 'replace' if self.replace_box.isChecked() else 'add'
+        return swc, snt_link(swc, mode)
 
     def send(self):
         swc, link = self._export()

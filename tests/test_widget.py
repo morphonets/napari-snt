@@ -72,6 +72,19 @@ def test_copy_link(make_napari_viewer):
     assert QApplication.clipboard().text().startswith('snt://open?tracings=')
 
 
+def test_copy_link_mode(make_napari_viewer):
+    from qtpy.QtWidgets import QApplication
+
+    viewer = make_napari_viewer()
+    widget = SendToSNTWidget(viewer)
+    viewer.add_points([[0, 0], [1, 1]], name='pts')
+    widget.copy_link()
+    assert QApplication.clipboard().text().endswith('&mode=add')
+    widget.replace_box.setChecked(True)
+    widget.copy_link()
+    assert QApplication.clipboard().text().endswith('&mode=replace')
+
+
 def test_scheme_registered_returns_tristate():
     from napari_snt._scheme import scheme_registered
 

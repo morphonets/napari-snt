@@ -122,9 +122,15 @@ def write_swc(
     return target
 
 
-def snt_link(swc_path: Path) -> str:
-    """snt://open link understood by SNT's link handler"""
-    return f'{SCHEME}://open?tracings={quote(swc_path.as_posix(), safe="")}'
+def snt_link(swc_path: Path, mode: str = 'add') -> str:
+    """snt://open link understood by SNT's link handler. mode is 'add' (keep
+    paths already in SNT) or 'replace' (discard them)"""
+    if mode not in ('add', 'replace'):
+        raise ValueError(f'Unknown mode: {mode}')
+    return (
+        f'{SCHEME}://open?tracings={quote(swc_path.as_posix(), safe="")}'
+        f'&mode={mode}'
+    )
 
 
 def read_swc(path) -> list[np.ndarray]:
