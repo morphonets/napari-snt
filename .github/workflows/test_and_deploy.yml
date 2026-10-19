@@ -1,5 +1,5 @@
-# This workflows will upload a Python Package using Twine when a release is created
-# For more information see: https://help.github.com/en/actions/language-and-framework-guides/using-python-with-github-actions#publishing-to-package-registries
+# Tests on push/PR. Pushing a "v*" tag also creates a GitHub release with the
+# built wheel and sdist attached (PyPI publishing is disabled, see below)
 name: tests
 
 on:
@@ -73,20 +73,42 @@ jobs:
       - uses: actions/checkout@v7
       - uses: hynek/build-and-inspect-python-package@v2
 
-  deploy:
-    # this will run when you have tagged a commit, starting with "v*"
-    # and requires that you have put your twine API key in your
-    # github secrets (see readme for details)
+  release:
+    # runs when a commit is tagged "v*": attaches the built wheel and sdist to
+    # a GitHub release (no PyPI)
     needs: [test, build-and-inspect-package]
     runs-on: ubuntu-latest
-    if: contains(github.ref, 'tags')
+    if: startsWith(github.ref, 'refs/tags/v')
     permissions:
-      id-token: write
+      contents: write
     steps:
       - name: Download built artifact to dist/
         uses: actions/download-artifact@v8
         with:
           name: Packages
           path: dist
-      - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >
+          gh release create "${{ github.ref_name }}" dist/*
+          --repo "${{ github.repository }}"
+          --title "${{ github.ref_name }}" --generate-notes
+
+  # To publish on PyPI later, replace the job above with this one (requires a
+  # PyPI trusted publisher configured for this repository)
+  #
+  # deploy:
+  #   needs: [test, build-and-inspect-package]
+  #   runs-on: ubuntu-latest
+  #   if: contains(github.ref, 'tags')
+  #   permissions:
+  #     id-token: write
+  #   steps:
+  #     - name: Download built artifact to dist/
+  #       uses: actions/download-artifact@v8
+  #       with:
+  #         name: Packages
+  #         path: dist
+  #     - name: Publish to PyPI
+  #       uses: pypa/gh-action-pypi-publish@release/v1
