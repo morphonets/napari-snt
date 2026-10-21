@@ -1,23 +1,25 @@
 # napari-snt
 
-[![License GNU GPL v3.0](https://img.shields.io/pypi/l/napari-snt.svg?color=green)](https://github.com/morphonets/napari-snt/raw/main/LICENSE)
 [![tests](https://github.com/morphonets/napari-snt/workflows/tests/badge.svg)](https://github.com/morphonets/napari-snt/actions)
 [![npe2](https://img.shields.io/badge/plugin-npe2-blue?link=https://napari.org/stable/plugins/index.html)](https://napari.org/stable/plugins/index.html)
 [![Copier](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/copier-org/copier/master/img/badge/badge-grayscale-inverted-border-purple.json)](https://github.com/copier-org/copier)
 
-Send napari polylines to [SNT](https://github.com/morphonets/snt) via `snt:/` links
+Send napari polylines to [SNT](https://github.com/morphonets/snt)
 and receive SNT's SWC data as napari polylines.
+
+![napari-snt v0.0.1](./resources/napar-snt-v0.0.1.png)
 
 ------------------------------------------------------------------------------------
 
-This [napari] plugin was generated with [copier] using the [napari-plugin-template].
+This [napari] plugin was generated with [copier] using the [napari-plugin-template] and was tested with [napari 0.9.2](https://github.com/napari/napari/releases/tag/v0.9.2).
 
 
 ## Usage
 
-1. Draw polylines in a Shapes layer (path or line shapes), or place ordered
+1. Make sure you are using SNT v5.0.23 or newer ([install instructions](https://imagej.net/plugins/snt/#installation))
+2. Draw polylines in a Shapes layer (path or line shapes), or place ordered
    points in a Points layer.
-2. Open *Plugins > SNT Bridge (napari-snt)*, pick the layer and click
+3. Open *Plugins > SNT Bridge (napari-snt)*, pick the layer and click
    *Open in SNT* (or *Copy snt:// Link*).
 
 The plugin writes an SWC file to `<tempdir>/snt-napari/` (one unbranched chain
